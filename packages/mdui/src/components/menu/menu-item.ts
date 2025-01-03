@@ -212,6 +212,24 @@ export class MenuItem extends AnchorMixin(
     return this.hasSlotController.test('submenu');
   }
 
+  private get placementX() {
+    const $window = $(window);
+    const $submenu = $(this.submenuRef.value!);
+    const itemRect = this.getBoundingClientRect();
+    const submenuHeight = $submenu.innerHeight();
+    const screenMargin = 8; // 子菜单与屏幕界至少保留 8px 间距
+
+    let placementX: 'top' | 'bottom' = 'bottom';
+
+    // 判断子菜单上下位置
+    if ($window.height() - itemRect.top > submenuHeight + screenMargin) {
+      placementX = 'bottom';
+    } else if (itemRect.top + itemRect.height > submenuHeight + screenMargin) {
+      placementX = 'top';
+    }
+    return placementX
+  }
+
   @watch('submenuOpen')
   private async onOpenChange() {
     const hasUpdated = this.hasUpdated;
@@ -228,8 +246,8 @@ export class MenuItem extends AnchorMixin(
     }
 
     const easingLinear = getEasing(this, 'linear');
-    const easingEmphasizedDecelerate = getEasing(this, 'emphasized-decelerate');
-    const easingEmphasizedAccelerate = getEasing(this, 'emphasized-accelerate');
+    const easingEmphasizedDecelerate = getEasing(this, 'standard-decelerate');
+    const easingEmphasizedAccelerate = getEasing(this, 'standard-decelerate');
 
     // 打开
     // 要区分是否首次渲染，首次渲染时不触发事件，不执行动画；非首次渲染，触发事件，执行动画
@@ -241,26 +259,25 @@ export class MenuItem extends AnchorMixin(
         }
       }
 
-      const duration = getDuration(this, 'medium4');
+      const duration = getDuration(this, 'long1');
 
       await stopAnimations(this.submenuRef.value!);
       this.submenuRef.value!.hidden = false;
       this.updateSubmenuPositioner();
       await Promise.all([
+        animateTo(this.submenuRef.value!, [{ opacity: 0 }, { opacity: 1 }], {
+          duration: hasUpdated ? duration * 0.5 : 0,
+          easing: easingLinear,
+        }),
         animateTo(
           this.submenuRef.value!,
-          [{ transform: 'scaleY(0.45)' }, { transform: 'scaleY(1)' }],
+          [
+            { clipPath: this.placementX == "bottom" ? 'xywh(0 0px 100% 0%)' : 'xywh(0 100% 100% 0%)' },
+            { clipPath: this.placementX == "bottom" ? 'xywh(0 0px 100% 100%)' : 'xywh(0 0% 100% 100%)' },
+          ],
           {
             duration: hasUpdated ? duration : 0,
             easing: easingEmphasizedDecelerate,
-          },
-        ),
-        animateTo(
-          this.submenuRef.value!,
-          [{ opacity: 0 }, { opacity: 1, offset: 0.125 }, { opacity: 1 }],
-          {
-            duration: hasUpdated ? duration : 0,
-            easing: easingLinear,
           },
         ),
       ]);
@@ -274,20 +291,27 @@ export class MenuItem extends AnchorMixin(
         return;
       }
 
-      const duration = getDuration(this, 'short4');
+      const duration = getDuration(this, 'medium4');
 
       await stopAnimations(this.submenuRef.value!);
       await Promise.all([
         animateTo(
           this.submenuRef.value!,
-          [{ transform: 'scaleY(1)' }, { transform: 'scaleY(0.45)' }],
-          { duration, easing: easingEmphasizedAccelerate },
+          [
+            { clipPath: this.placementX == "bottom" ? 'xywh(0 0px 100% 100%)' : 'xywh(0 0% 100% 100%)' },
+            { clipPath: this.placementX == "bottom" ? 'xywh(0 0px 100% 0%)' : 'xywh(0 100% 100% 0%)' },
+          ],
+          {
+            duration: duration * 0.7,
+            easing: easingEmphasizedAccelerate,
+            fill: 'forwards',
+          },
         ),
-        animateTo(
-          this.submenuRef.value!,
-          [{ opacity: 1 }, { opacity: 1, offset: 0.875 }, { opacity: 0 }],
-          { duration, easing: easingLinear },
-        ),
+        animateTo(this.submenuRef.value!, [{ opacity: 1 }, { opacity: 0 }], {
+          duration: duration * 0.65,
+          easing: easingLinear,
+          fill: 'forwards',
+        }),
       ]);
 
       if (this.submenuRef.value) {
@@ -356,12 +380,12 @@ export class MenuItem extends AnchorMixin(
       ></mdui-ripple>
       ${this.href && !this.disabled
         ? this.renderAnchor({
-            part: 'container',
-            className,
-            content: this.renderInner(useDefaultEndIcon, hasIcon),
-            refDirective: ref(this.containerRef),
-            tabIndex: this.focusable ? 0 : -1,
-          })
+          part: 'container',
+          className,
+          content: this.renderInner(useDefaultEndIcon, hasIcon),
+          refDirective: ref(this.containerRef),
+          tabIndex: this.focusable ? 0 : -1,
+        })
         : html`<div
             part="container"
             ${ref(this.containerRef)}
@@ -370,16 +394,16 @@ export class MenuItem extends AnchorMixin(
             ${this.renderInner(useDefaultEndIcon, hasIcon)}
           </div>`}
       ${when(
-        hasSubmenu,
-        () =>
-          html`<slot
+          hasSubmenu,
+          () =>
+            html`<slot
             name="submenu"
             ${ref(this.submenuRef)}
             part="submenu"
             class="submenu"
             hidden
           ></slot>`,
-      )}`;
+        )}`;
   }
 
   /**
@@ -550,16 +574,16 @@ export class MenuItem extends AnchorMixin(
             class="selected-icon"
           >
             ${this.selectedIcon
-              ? html`<mdui-icon
+            ? html`<mdui-icon
                   name=${this.selectedIcon}
                   class="i"
                 ></mdui-icon>`
-              : html`<mdui-icon-check class="i"></mdui-icon-check>`}
+            : html`<mdui-icon-check class="i"></mdui-icon-check>`}
           </slot>`
         : html`<slot name="icon" part="icon" class="icon">
             ${hasIcon
-              ? html`<mdui-icon name=${this.icon} class="i"></mdui-icon>`
-              : nothingTemplate}
+            ? html`<mdui-icon name=${this.icon} class="i"></mdui-icon>`
+            : nothingTemplate}
           </slot>`}
       <div class="label-container">
         <slot part="label" class="label"></slot>
@@ -574,8 +598,8 @@ export class MenuItem extends AnchorMixin(
           ></mdui-icon-arrow-right>`
         : html`<slot name="end-icon" part="end-icon" class="end-icon">
             ${this.endIcon
-              ? html`<mdui-icon name=${this.endIcon}></mdui-icon>`
-              : nothingTemplate}
+            ? html`<mdui-icon name=${this.endIcon}></mdui-icon>`
+            : nothingTemplate}
           </slot>`}
     </slot>`;
   }
