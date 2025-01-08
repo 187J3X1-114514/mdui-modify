@@ -229,8 +229,8 @@ export class Dropdown extends MduiElement<DropdownEventMap> {
     }
 
     const easingLinear = getEasing(this, 'linear');
-    const easingEmphasizedDecelerate = getEasing(this, 'emphasized-decelerate');
-    const easingEmphasizedAccelerate = getEasing(this, 'emphasized-accelerate');
+    const easingEmphasizedDecelerate = getEasing(this, 'standard-decelerate');
+    const easingEmphasizedAccelerate = getEasing(this, 'standard-decelerate');
 
     // 打开
     // 要区分是否首次渲染，首次渲染时不触发事件，不执行动画；非首次渲染，触发事件，执行动画
@@ -250,31 +250,27 @@ export class Dropdown extends MduiElement<DropdownEventMap> {
         focusablePanel?.focus();
       });
 
-      const duration = getDuration(this, 'medium4');
+      const duration = getDuration(this, 'long1');
 
       await stopAnimations(this.panelRef.value!);
       this.panelRef.value!.hidden = false;
       this.updatePositioner();
       await Promise.all([
+        animateTo(this.panelRef.value!, [{ opacity: 0 }, { opacity: 1 }], {
+          duration: hasUpdated ? duration * 0.5 : 0,
+          easing: easingLinear,
+        }),
         animateTo(
           this.panelRef.value!,
           [
-            { transform: `${this.getCssScaleName()}(0.45)` },
-            { transform: `${this.getCssScaleName()}(1)` },
+            { clipPath: this.getAnimateCss(true, true) },
+            { clipPath: this.getAnimateCss(true, false) },
           ],
           {
             duration: hasUpdated ? duration : 0,
             easing: easingEmphasizedDecelerate,
           },
-        ),
-        animateTo(
-          this.panelRef.value!,
-          [{ opacity: 0 }, { opacity: 1, offset: 0.125 }, { opacity: 1 }],
-          {
-            duration: hasUpdated ? duration : 0,
-            easing: easingLinear,
-          },
-        ),
+        )
       ]);
 
       if (hasUpdated) {
@@ -296,23 +292,27 @@ export class Dropdown extends MduiElement<DropdownEventMap> {
         this.triggerElement.focus();
       }
 
-      const duration = getDuration(this, 'short4');
+      const duration = getDuration(this, 'medium4');
 
       await stopAnimations(this.panelRef.value);
       await Promise.all([
         animateTo(
           this.panelRef.value,
           [
-            { transform: `${this.getCssScaleName()}(1)` },
-            { transform: `${this.getCssScaleName()}(0.45)` },
+            { clipPath: this.getAnimateCss(false, true) },
+            { clipPath: this.getAnimateCss(false, false) },
           ],
-          { duration, easing: easingEmphasizedAccelerate },
+          {
+            duration: duration * 0.7,
+            easing: easingEmphasizedAccelerate,
+            fill: 'forwards',
+          },
         ),
-        animateTo(
-          this.panelRef.value,
-          [{ opacity: 1 }, { opacity: 1, offset: 0.875 }, { opacity: 0 }],
-          { duration, easing: easingLinear },
-        ),
+        animateTo(this.panelRef.value!, [{ opacity: 1 }, { opacity: 0 }], {
+          duration: duration * 0.65,
+          easing: easingLinear,
+          fill: 'forwards',
+        }),
       ]);
 
       // 可能关闭 dropdown 时该元素已经不存在了（比如页面直接跳转了）
@@ -386,11 +386,41 @@ export class Dropdown extends MduiElement<DropdownEventMap> {
       ></slot>`;
   }
 
-  /**
-   * 获取 dropdown 打开、关闭动画的 CSS scaleX 或 scaleY
-   */
   private getCssScaleName() {
     return this.animateDirection === 'horizontal' ? 'scaleX' : 'scaleY';
+  }
+
+  private getAnimateCss(open: boolean, first: boolean) {
+    if (this.animateDirection === 'horizontal') {
+      if (this.position.includes("left")) {
+        if (open) {
+          return first ? "xywh(100% 0px 0% 100%)" : "xywh(0% 0px 100% 100%)";
+        } else {
+          return first ? "xywh(0% 0px 100% 100%)" : "xywh(100% 0px 0% 100%)";
+        }
+      } else {
+        if (open) {
+          return first ? "xywh(0 0px 0% 100%)" : "xywh(0 0px 100% 100%)";
+        } else {
+          return first ? "xywh(0 0px 100% 100%)" : "xywh(0 0px 0% 100%)";
+        }
+      }
+    } else {
+      if (this.position.includes("top")) {
+        if (open) {
+          return first ? "xywh(0px 100% 100% 0%)" : "xywh(0px 0% 100% 100%)";
+        } else {
+          return first ? "xywh(0px 0% 100% 100%)" : "xywh(0px 100% 100% 0%)";
+        }
+      } else {
+        if (open) {
+          return first ? "xywh(0 0px 100% 0%)" : "xywh(0 0px 100% 100%)";
+        } else {
+          return first ? "xywh(0 0px 100% 100%)" : "xywh(0 0px 100% 0%)";
+        }
+      }
+
+    }
   }
 
   /**
@@ -528,6 +558,57 @@ export class Dropdown extends MduiElement<DropdownEventMap> {
     }, this.closeDelay || 50);
   }
 
+  private get position() {
+    if (this.placement !== 'auto') return this.placement;
+    const panelElements = this.panelElements;
+    const $window = $(window);
+    const triggerClientRect = this.triggerElement.getBoundingClientRect();
+    const triggerRect = this.openOnPointer
+      ? {
+        top: this.pointerOffsetY + triggerClientRect.top,
+        left: this.pointerOffsetX + triggerClientRect.left,
+        width: 0,
+        height: 0,
+      }
+      : triggerClientRect;
+    const screenMargin = 8;
+    const windowWidth = $window.width();
+    const windowHeight = $window.height();
+    let position: 'top' | 'bottom' | 'left' | 'right';
+    const panelRect = {
+      width: Math.max(
+        ...(panelElements?.map((panel) => panel.offsetWidth) ?? []),
+      ),
+      height: panelElements
+        ?.map((panel) => panel.offsetHeight)
+        .reduce((total, height) => total + height, 0),
+    };
+
+    if (
+      windowHeight - triggerRect.top - triggerRect.height >
+      panelRect.height + screenMargin
+    ) {
+      // 下方放得下，放下方
+      position = 'bottom';
+    } else if (triggerRect.top > panelRect.height + screenMargin) {
+      // 上方放得下，放上方
+      position = 'top';
+    } else if (
+      windowWidth - triggerRect.left - triggerRect.width >
+      panelRect.width + screenMargin
+    ) {
+      // 右侧放得下，放右侧
+      position = 'right';
+    } else if (triggerRect.left > panelRect.width + screenMargin) {
+      // 左侧放得下，放左侧
+      position = 'left';
+    } else {
+      // 默认放下方
+      position = 'bottom';
+    }
+    return position;
+  }
+
   // 更新 panel 的位置
   private updatePositioner(): void {
     const $panel = $(this.panelRef.value!);
@@ -546,11 +627,11 @@ export class Dropdown extends MduiElement<DropdownEventMap> {
     const triggerClientRect = this.triggerElement.getBoundingClientRect();
     const triggerRect = this.openOnPointer
       ? {
-          top: this.pointerOffsetY + triggerClientRect.top,
-          left: this.pointerOffsetX + triggerClientRect.left,
-          width: 0,
-          height: 0,
-        }
+        top: this.pointerOffsetY + triggerClientRect.top,
+        left: this.pointerOffsetX + triggerClientRect.left,
+        width: 0,
+        height: 0,
+      }
       : triggerClientRect;
 
     // dropdown 与屏幕边界至少保留 8px 间距
@@ -599,9 +680,9 @@ export class Dropdown extends MduiElement<DropdownEventMap> {
           alignment = 'start';
         } else if (
           triggerRect.left + triggerRect.width / 2 >
-            panelRect.width / 2 + screenMargin &&
+          panelRect.width / 2 + screenMargin &&
           windowWidth - triggerRect.left - triggerRect.width / 2 >
-            panelRect.width / 2 + screenMargin
+          panelRect.width / 2 + screenMargin
         ) {
           // 居中对齐放得下，居中对齐
           alignment = undefined;
@@ -621,9 +702,9 @@ export class Dropdown extends MduiElement<DropdownEventMap> {
           alignment = 'start';
         } else if (
           triggerRect.top + triggerRect.height / 2 >
-            panelRect.height / 2 + screenMargin &&
+          panelRect.height / 2 + screenMargin &&
           windowHeight - triggerRect.top - triggerRect.height / 2 >
-            panelRect.height / 2 + screenMargin
+          panelRect.height / 2 + screenMargin
         ) {
           // 居中对齐放得下，居中对齐
           alignment = undefined;

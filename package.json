@@ -17,7 +17,7 @@
     "build:mdui": "tsx scripts/mdui/build-less.ts && tsx scripts/mdui/build-lit-style.ts && tsc -p packages/mdui/tsconfig.json && tsx scripts/mdui/build-lit-js.ts && npm-run-all -s localize-build customElements:mdui i18n -p vscode:mdui webtypes:mdui jsxtypes:mdui",
     "build:mdui-dev": "tsx scripts/mdui/build-less.ts --dev && tsx scripts/mdui/build-lit-style.ts --dev && tsc -p packages/mdui/tsconfig.json && tsx scripts/mdui/build-lit-js.ts --dev && npm run localize-build",
     "build:icons": "tsc -p packages/icons/tsconfig.json && tsx scripts/icons/build-lit-js.ts",
-    "build": "npm-run-all -s clean lint build:jq build:shared -p build:mdui build:icons",
+    "build": "npm-run-all -s clean build:jq build:shared -p build:mdui build:icons",
     "build-dev": "npm-run-all -s clean lint build:jq build:shared -p build:mdui-dev build:icons",
     "bundle": "npm run build && rollup --config scripts/mdui/rollup.config.js",
     "test:jq": "eslint --fix packages/jq/__test__/**/*.ts && tsc -p packages/jq/__test__/tsconfig.json && tsx scripts/jq/test.ts",
